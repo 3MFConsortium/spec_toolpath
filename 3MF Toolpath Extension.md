@@ -19,17 +19,19 @@
 
 ## Table of Contents
 
+[Change history](#change-history)
+
 [Preface](#preface)
 
-- [1.1. About this Specification](#11-about-this-specification)
-- [1.2. Document Conventions](#12-document-conventions)
-- [1.3. Language Notes](#13-language-notes)
-- [1.4. Software Conformance](#14-software-conformance)
+- [About this Specification](#about-this-specification)
+- [Document Conventions](#document-conventions)
+- [Language Notes](#language-notes)
+- [Software Conformance](#software-conformance)
 
 [Part I: 3MF Documents](#part-i-3mf-documents)
 
 - [Chapter 1. Overview of Additions](#chapter-1-overview-of-additions)
-  - [Additions to the core model schema](#additions-to-the-core-model-schema)
+  - [1.1 Additions to the core model schema](#11-additions-to-the-core-model-schema)
 - [Chapter 2. Planar Toolpaths and 3-Axis to 6-Axis Deposition Toolpaths](#chapter-2-planar-toolpaths-and-3-axis-to-6-axis-deposition-toolpaths)
   - [2.1 Planar Toolpaths](#21-planar-toolpaths)
   - [2.2 Multi Axis Deposition Toolpaths (3-6 axes)](#22-multi-axis-deposition-toolpaths-3-6-axes)
@@ -76,11 +78,16 @@
 
 [References](#references)
 
+## Change History
+
+| **Version** | **Changes Description** | **Date** |
+| --- | --- | --- |
+| 1.0.0 | First published version | September 3, 2026 |
 
 
 # Preface
 
-## 1.1. About this Specification
+## About this Specification
 
 This 3MF toolpath specification is an extension to the core 3MF specification. This document does not stand alone and only applies as an addendum to the core 3MF specification. Usage of this and any other 3MF extensions follow an a la carte model, defined in the core 3MF specification.
 
@@ -94,7 +101,7 @@ The information contained in this specification is subject to change. Every effo
 
 This extension MUST be used only with Core specification 1.x. and Production extension specification 1.x.
 
-## 1.2. Document Conventions
+## Document Conventions
 
 Except where otherwise noted, syntax descriptions are expressed in the ABNF format as defined in RFC 4234.
 
@@ -108,7 +115,7 @@ Notes are formatted as follows:
 
 >**Note:** This is a note.
 
-## 1.3. Language Notes
+## Language Notes
 
 In this specification, the words that are used to define the significance of each requirement are written in uppercase. These words are used in accordance with their definitions in RFC 2119, and their respective meanings are reproduced below:
 
@@ -116,7 +123,7 @@ In this specification, the words that are used to define the significance of eac
 - _SHOULD._ This word, or the adjective "RECOMMENDED" means that there are valid reasons in particular circumstances to ignore this item, but the full implications should be understood and the case carefully weighed before choosing a different course.
 - _MAY._ This word, or the adjective "OPTIONAL" means that this item is truly optional. For example, one implementation may choose to include the item because a particular marketplace or scenario requires it or because it enhances the product. Another implementation may omit the same item.
 
-## 1.4. Software Conformance
+## Software Conformance
 
 Most requirements are expressed as format or package requirements rather than implementation requirements.
 
@@ -164,7 +171,7 @@ The goal of this extension is to offer a structured, vendor-neutral, and scalabl
 
 The producer of a 3MF document with the toolpath extension MUST also include the production extension as required. A consumer of the toolpath extension MUST  also understand the production extension in the document. This ensures the availability of proper referenceable UUIDs throughout the document.
 
-## Additions to the core model schema
+## 1.1 Additions to the core model schema
 
 The Toolpath Extension makes two additions to the core 3MF model document:
 
