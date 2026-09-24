@@ -1,0 +1,26 @@
+# It is used to create an easily distributable and printable PDF
+# version of a specification document written in markdown (3MF-style).
+
+# (outdated) Documentation:
+#   https://github.com/3MFConsortium/spec_conventions/blob/master/generatePDFs/generatePDFs.md
+
+on: [pull_request, workflow_dispatch]
+name: Build
+jobs:
+  build-linux:
+    runs-on: ubuntu-latest
+    env:
+      SPECNAME: "3MF Toolpath Extension"
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: true
+      - run: pip install wheel
+      - run: pip install grip
+      - run: ./markdownToPDF/install_wkhtmltopdf.sh
+      - run: ./markdownToPDF/mdToPDF.sh "$SPECNAME"
+      - name: Upload PDF
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ env.SPECNAME }}.pdf
+          path: ${{ env.SPECNAME }}.pdf
