@@ -395,13 +395,13 @@ This design has two important properties:
 
 Although the mechanism was designed for laser power, it is deliberately attribute-agnostic: the same indirection can modulate any numeric profile attribute that a producer and consumer agree upon.
 
-The `type` attribute selects how many factors an element carries and how they are interpreted:
+The `type` attribute selects which factor forms an element may carry and how they are interpreted:
 
 | `type`      | Factors per element  | Interpretation                                                                                                          |
 | ----------- | -------------------- | ----------------------------------------------------------------------------------------------------------------------- |
-| `constant`  | one (e.g. `f`)       | A single value for the whole element.                                                                                   |
-| `linear`    | two (`f1`, `f2`)     | The value is modulated linearly from the start point (`f1`) to the end point (`f2`) of the element.                     |
-| `nonlinear` | two + support points | As `linear`, plus one or more **\<sub>** control points describing a piecewise-linear calibration curve along the element (see [Nonlinear Override Support Points](#nonlinear-override-support-points)). |
+| `constant`  | up to one (e.g. `f1`) | The `*1` value applies uniformly across the element; `*2` attributes and **\<sub>** children are prohibited.             |
+| `linear`    | up to two (`f1`, `f2`) | The value is modulated linearly from the start point (`f1`) to the end point (`f2`) of the element. If `f2` is omitted, it defaults to `f1`. |
+| `nonlinear` | up to two + support points | As `linear`, and MAY include **\<sub>** control points describing a piecewise-linear calibration curve along the element (see [Nonlinear Override Support Points](#nonlinear-override-support-points)). |
 
 #### Example: per-hatch power modulation
 
@@ -419,19 +419,19 @@ In the layer data, individual hatches then carry only a dimensionless `f` factor
 <!-- linear ramp along the line: 0 W -> 200 W -->
 <hatch x1="0" y1="0" x2="10000" y2="0" f1="0.0" f2="1.0"/>
 
-<!-- a single (less-granular) constant value is also permitted: 100 W across the line -->
-<hatch x1="0" y1="100" x2="10000" y2="100" f="0.5"/>
+<!-- omitting f2 makes f1 uniform: 100 W across the line -->
+<hatch x1="0" y1="100" x2="10000" y2="100" f1="0.5"/>
 ```
 
-A consumer reading only the resource-level index sees `minvalue="0" maxvalue="200"` and can guarantee that no hatch in the build will exceed 200 W - and that `laserpower` is the only modulated attribute — before touching any layer geometry. Under a `linear` modifier an element MAY still carry a single constant `f`; a *less*-granular value is always permitted, and only values *more* granular than the declared `type` are forbidden (see the producer rules below).
+A consumer reading only the resource-level index sees `minvalue="0" maxvalue="200"` and can guarantee that no hatch in the build will exceed 200 W - and that `laserpower` is the only modulated attribute — before touching any layer geometry. Under a `linear` modifier an element MAY carry only `f1`; the omitted `f2` then defaults to `f1`, producing a constant value across the element (see the producer rules below).
 
 ### Definition
 
 The **\<tp\:modifier>** element refines a parent **\<tp\:toolpathprofile>** by defining how one numeric profile attribute MAY be overridden *per geometry element* (e.g., per hatch line) or as a (linear or non-linear gradient) on a geometry element. The override is specified by a normalized scalar factor on those elements:
 
-* One scalar factor for a constant override on the element
-* Two scalar factors for a linear override on the element. This specifies a linear gradient from the start point to the end point.
-* Two scalar factors plus a list of increasing internal support points for a non-linear override on the element. This allows to give a piecewise linear curve on an element with normalized values between 0 and 1 that map to the pointwise override.
+* One `*1` scalar factor for a constant override on the element.
+* A `*1` scalar factor and an optional `*2` scalar factor for a linear override on the element. When present, `*2` specifies the end of a linear gradient from the start point; when omitted, it defaults to `*1`.
+* Optional `*1` and `*2` scalar factors plus a list of increasing internal support points for a non-linear override on the element. This allows a piecewise-linear curve on an element with normalized values between 0 and 1 that map to the pointwise override.
 
 
 
@@ -465,15 +465,18 @@ The structure as defined in the 3MF specification allows consumers to check befo
 
 >**Note:** The intended primary use case of modifiers is to modulate laser properties that are location-dependent (like power ramps or special localized delays), and not influencing the movement trajectory directly (like speed ramps would). This specification allows both use cases, but a producer should be aware that the latter might be rejected by many consumers.
 
-A producer MUST obey the following rules:
+A producer MUST obey the following rules for the factor associated with each modifier:
 
-- For all override types, a toolpath layer geometry element may contain attributes `"e"`, `"f"`, `"g"`, and `"h"` for the constant case.
+- For `type="constant"`, a toolpath layer geometry element MAY contain only the corresponding `*1` attribute (`e1`, `f1`, `g1`, or `h1`). The corresponding `*2` attribute and **\<sub>** children carrying that factor are prohibited.
 
-- For linear and nonlinear override types, a toolpath layer geometry element may _instead_ contain attributes `"e1"`,`"e2"`, `"f1"`,`"f2"`, `"g1"`, `"g2"`, and `"h1"`, `"h2"` for the start respective end point of the element.
+- For `type="linear"`, a toolpath layer geometry element MAY contain the corresponding `*1` and `*2` attributes. **\<sub>** children carrying that factor are prohibited.
 
-- For non-linear types, an element may _in addition_ contain **\<sub>** child elements to specify a 0-1 parametrized piecewise-linear curve on the element (see below).
+- For `type="nonlinear"`, a toolpath layer geometry element MAY contain the corresponding `*1` and `*2` attributes and MAY contain **\<sub>** children carrying the single-valued factor (`e`, `f`, `g`, or `h`) at interior parametric positions.
 
-- No element may contain an override factor data that is more granular than its specified modifier type.
+The unindexed attributes `e`, `f`, `g`, and `h` MUST NOT appear on geometry elements; they are reserved for **\<sub>** support points. On a geometry element, an omitted `*2` value defaults to the resolved `*1` value, producing a constant scale across that element when no support point for the factor is present. An omitted `*1` value is resolved as follows:
+
+- On a discontiguous geometry element such as **\<hatch>**, it defaults to `1.0`, the nominal profile value.
+- On a contiguous geometry element such as **\<point>**, **\<point3d>**, or **\<point6d>**, it inherits the effective end value of the immediately preceding vertex: that vertex's `*2` value when present, or its resolved `*1` value otherwise. At the first vertex of an open polyline, or whenever no prior value exists, it defaults to `1.0`.
 
 ### Nonlinear Override Support Points
 
@@ -498,17 +501,16 @@ Together with the modifier factor values on the parent element (given as `e1`/`e
 * Each **\<sub>** element MUST have a `t` attribute.
 * At least one of `e`, `f`, `g`, `h` MUST be present on each **\<sub>** element.
 * If multiple **\<sub>** elements are present, their `t` values MUST be strictly increasing in document order.
-* **\<sub>** elements MUST only be present when the parent element also carries linear-style factor attributes (`e1`/`e2`, `f1`/`f2`, `g1`/`g2`, `h1`/`h2`).
-* **\<sub>** elements MUST NOT appear on geometry elements whose associated profile modifier has `type` other than `nonlinear`.
+* Every factor attribute on a **\<sub>** element MUST correspond to a profile modifier whose `type` is `nonlinear`.
 
 **Consumer rules:**
 
-* Consumers MUST interpolate linearly between consecutive support points (including the start and end values from the parent element).
-* If a **\<sub>** element is missing a factor attribute that the parent element provides (e.g., the parent has `f1`/`f2` but the **\<sub>** omits `f`), the consumer MUST linearly interpolate that factor as if the **\<sub>** were not present for that factor.
+* Consumers MUST interpolate linearly between consecutive support points (including the resolved start and end values from the parent element).
+* If a **\<sub>** element is missing a factor attribute that is defined on the parent or by the fallback rules (e.g., the parent has `f1` and/or `f2` but the **\<sub>** omits `f`), the consumer MUST linearly interpolate that factor as if the **\<sub>** were not present for that factor.
 
 **Interpolation model:**
 
-Given a parent element with start value `f1`, end value `f2`, and _n_ **\<sub>** elements with positions t&#x2081;,&nbsp;t&#x2082;,&nbsp;&hellip;,&nbsp;t&#x2099; and values v&#x2081;,&nbsp;v&#x2082;,&nbsp;&hellip;,&nbsp;v&#x2099;, the effective value at parametric position _p_ (0&nbsp;&le;&nbsp;p&nbsp;&le;&nbsp;1) is obtained by piecewise-linear interpolation over the sequence of control points:
+Given a parent element with resolved start value `f1`, resolved end value `f2` (which defaults to `f1` when omitted), and _n_ **\<sub>** elements with positions t&#x2081;,&nbsp;t&#x2082;,&nbsp;&hellip;,&nbsp;t&#x2099; and values v&#x2081;,&nbsp;v&#x2082;,&nbsp;&hellip;,&nbsp;v&#x2099;, the effective value at parametric position _p_ (0&nbsp;&le;&nbsp;p&nbsp;&le;&nbsp;1) is obtained by piecewise-linear interpolation over the sequence of control points:
 
 (0,&nbsp;f1),&ensp;(t&#x2081;,&nbsp;v&#x2081;),&ensp;(t&#x2082;,&nbsp;v&#x2082;),&ensp;&hellip;,&ensp;(t&#x2099;,&nbsp;v&#x2099;),&ensp;(1,&nbsp;f2)
 
@@ -822,14 +824,10 @@ For type `loop` and `polyline`, the segment MUST contain a non-empty list of pla
 | x         | **ST\_Integer** | required | X coordinate (device units).                                                               |
 | y         | **ST\_Integer** | required | Y coordinate (device units).                                                               |
 | tag       | **ST\_NonNegativeInteger** | optional | Producer-defined marker for the line that the point closes. Tags have no direct meaning, but MAY be referenced from Metadata. |
-| e         | **ST\_ModifierScale** | optional | Scale factor for a constant `e` modifier for the line that the point closes. MUST be a number value between 0 and 1. MUST NOT be given, if `e1` or `e2` are present. |
-| f         | **ST\_ModifierScale** | optional | Scale factor for a constant `f` modifier for the line that the point closes. MUST be a number value between 0 and 1. MUST NOT be given, if `f1` or `f2` are present. |
-| g         | **ST\_ModifierScale** | optional | Scale factor for a constant `g` modifier for the line that the point closes. MUST be a number value between 0 and 1. MUST NOT be given, if `g1` or `g2` are present. |
-| h         | **ST\_ModifierScale** | optional | Scale factor for a constant `h` modifier for the line that the point closes. MUST be a number value between 0 and 1. MUST NOT be given, if `h1` or `h2` are present. |
-| e1, e2         | **ST\_ModifierScale** | optional | First and second scale factors for a linear `e` modifier for the line that the point closes. MUST be a number value between 0 and 1.  MUST NOT be given, if `e` is present. If `e1` is given, `e2` MUST be present, and vice versa. |
-| f1, f2         | **ST\_ModifierScale** | optional | First and second scale factors for a linear `f` modifier for the line that the point closes. MUST be a number value between 0 and 1.  MUST NOT be given, if `f` is present. If `f1` is given, `f2` MUST be present, and vice versa. |
-| g1, g2         | **ST\_ModifierScale** | optional | First and second scale factors for a linear `g` modifier for the line that the point closes. MUST be a number value between 0 and 1.  MUST NOT be given, if `g` is present. If `g1` is given, `g2` MUST be present, and vice versa. |
-| h1, h2         | **ST\_ModifierScale** | optional | First and second scale factors for a linear `h` modifier for the line that the point closes. MUST be a number value between 0 and 1.  MUST NOT be given, if `h` is present. If `h1` is given, `h2` MUST be present, and vice versa. |
+| e1, e2         | **ST\_ModifierScale** | optional | Start (`e1`) and optional end (`e2`) scale factors for the line that the point closes. Each MUST be between 0 and 1 and is independently optional. |
+| f1, f2         | **ST\_ModifierScale** | optional | Start (`f1`) and optional end (`f2`) scale factors for the line that the point closes. Each MUST be between 0 and 1 and is independently optional. |
+| g1, g2         | **ST\_ModifierScale** | optional | Start (`g1`) and optional end (`g2`) scale factors for the line that the point closes. Each MUST be between 0 and 1 and is independently optional. |
+| h1, h2         | **ST\_ModifierScale** | optional | Start (`h1`) and optional end (`h2`) scale factors for the line that the point closes. Each MUST be between 0 and 1 and is independently optional. |
 
 
 **Child \<hatch> (planar)**
@@ -845,14 +843,10 @@ For type `hatch`, the segment MUST contain a non-empty list of planar hatches.
 | x2         | **ST\_Integer** | required | X coordinate of the second hatch point (device units).                                                               |
 | y2         | **ST\_Integer** | required | Y coordinate of the second hatch point (device units).                                                               |
 | tag       | **ST\_NonNegativeInteger** | optional | Producer-defined marker for the hatch line. Tags have no direct meaning, but MAY be referenced from Metadata. |
-| e         | **ST\_ModifierScale** | optional | Scale factor for a constant `e` modifier for the hatch line. MUST be a number value between 0 and 1. MUST NOT be given, if `e1` or `e2` are present. |
-| f         | **ST\_ModifierScale** | optional | Scale factor for a constant `f` modifier for the hatch line. MUST be a number value between 0 and 1. MUST NOT be given, if `f1` or `f2` are present. |
-| g         | **ST\_ModifierScale** | optional | Scale factor for a constant `g` modifier for the hatch line. MUST be a number value between 0 and 1. MUST NOT be given, if `g1` or `g2` are present. |
-| h         | **ST\_ModifierScale** | optional | Scale factor for a constant `h` modifier for the hatch line. MUST be a number value between 0 and 1. MUST NOT be given, if `h1` or `h2` are present. |
-| e1, e2         | **ST\_ModifierScale** | optional | First and second scale factors for a linear `e` modifier from the start to the end point of the hatch. MUST be a number value between 0 and 1.  MUST NOT be given, if `e` is present. If `e1` is given, `e2` MUST be present, and vice versa. |
-| f1, f2         | **ST\_ModifierScale** | optional | First and second scale factors for a linear `f` modifier from the start to the end point of the hatch. MUST be a number value between 0 and 1.  MUST NOT be given, if `f` is present. If `f1` is given, `f2` MUST be present, and vice versa. |
-| g1, g2         | **ST\_ModifierScale** | optional | First and second scale factors for a linear `g` modifier from the start to the end point of the hatch. MUST be a number value between 0 and 1.  MUST NOT be given, if `g` is present. If `g1` is given, `g2` MUST be present, and vice versa. |
-| h1, h2         | **ST\_ModifierScale** | optional | First and second scale factors for a linear `h` modifier from the start to the end point of the hatch. MUST be a number value between 0 and 1.  MUST NOT be given, if `h` is present. If `h1` is given, `h2` MUST be present, and vice versa. |
+| e1, e2         | **ST\_ModifierScale** | optional | Start (`e1`) and optional end (`e2`) scale factors for the hatch line. Each MUST be between 0 and 1 and is independently optional. |
+| f1, f2         | **ST\_ModifierScale** | optional | Start (`f1`) and optional end (`f2`) scale factors for the hatch line. Each MUST be between 0 and 1 and is independently optional. |
+| g1, g2         | **ST\_ModifierScale** | optional | Start (`g1`) and optional end (`g2`) scale factors for the hatch line. Each MUST be between 0 and 1 and is independently optional. |
+| h1, h2         | **ST\_ModifierScale** | optional | Start (`h1`) and optional end (`h2`) scale factors for the hatch line. Each MUST be between 0 and 1 and is independently optional. |
 
 
 **Child \<point3d> (3axis)**
@@ -867,14 +861,10 @@ For type `polyline3d`, the segment MUST contain a non-empty list of 3axis points
 | y         | **ST\_Integer** | required | Y coordinate (device units).                                                               |
 | z         | **ST\_Integer** | required | Z coordinate (device units).                                                               |
 | tag       | **ST\_NonNegativeInteger** | optional | Producer-defined marker for the line that the point closes. Tags have no direct meaning, but MAY be referenced from Metadata. |
-| e         | **ST\_ModifierScale** | optional | Scale factor for a constant `e` modifier for the line that the point closes. MUST be a number value between 0 and 1. MUST NOT be given, if `e1` or `e2` are present. |
-| f         | **ST\_ModifierScale** | optional | Scale factor for a constant `f` modifier for the line that the point closes. MUST be a number value between 0 and 1. MUST NOT be given, if `f1` or `f2` are present. |
-| g         | **ST\_ModifierScale** | optional | Scale factor for a constant `g` modifier for the line that the point closes. MUST be a number value between 0 and 1. MUST NOT be given, if `g1` or `g2` are present. |
-| h         | **ST\_ModifierScale** | optional | Scale factor for a constant `h` modifier for the line that the point closes. MUST be a number value between 0 and 1. MUST NOT be given, if `h1` or `h2` are present. |
-| e1, e2         | **ST\_ModifierScale** | optional | First and second scale factors for a linear `e` modifier for the line that the point closes. MUST be a number value between 0 and 1.  MUST NOT be given, if `e` is present. If `e1` is given, `e2` MUST be present, and vice versa. |
-| f1, f2         | **ST\_ModifierScale** | optional | First and second scale factors for a linear `f` modifier for the line that the point closes. MUST be a number value between 0 and 1.  MUST NOT be given, if `f` is present. If `f1` is given, `f2` MUST be present, and vice versa. |
-| g1, g2         | **ST\_ModifierScale** | optional | First and second scale factors for a linear `g` modifier for the line that the point closes. MUST be a number value between 0 and 1.  MUST NOT be given, if `g` is present. If `g1` is given, `g2` MUST be present, and vice versa. |
-| h1, h2         | **ST\_ModifierScale** | optional | First and second scale factors for a linear `h` modifier for the line that the point closes. MUST be a number value between 0 and 1.  MUST NOT be given, if `h` is present. If `h1` is given, `h2` MUST be present, and vice versa. |
+| e1, e2         | **ST\_ModifierScale** | optional | Start (`e1`) and optional end (`e2`) scale factors for the line that the point closes. Each MUST be between 0 and 1 and is independently optional. |
+| f1, f2         | **ST\_ModifierScale** | optional | Start (`f1`) and optional end (`f2`) scale factors for the line that the point closes. Each MUST be between 0 and 1 and is independently optional. |
+| g1, g2         | **ST\_ModifierScale** | optional | Start (`g1`) and optional end (`g2`) scale factors for the line that the point closes. Each MUST be between 0 and 1 and is independently optional. |
+| h1, h2         | **ST\_ModifierScale** | optional | Start (`h1`) and optional end (`h2`) scale factors for the line that the point closes. Each MUST be between 0 and 1 and is independently optional. |
 
 
 **Child \<point6d> (6axis)**
@@ -893,14 +883,10 @@ For type `polyline6d`, the segment MUST contain a non-empty list of 6axis points
 | k         | **ST\_Number** | required | Quaternion `k` value of a reference frame at the point.                                                               |
 | w         | **ST\_Number** | required | Quaternion `w` value of a reference frame at the point.                                                               |
 | tag       | **ST\_NonNegativeInteger** | optional | Producer-defined marker for the line that the point closes. Tags have no direct meaning, but MAY be referenced from Metadata. |
-| e         | **ST\_ModifierScale** | optional | Scale factor for a constant `e` modifier for the line that the point closes. MUST be a number value between 0 and 1. MUST NOT be given, if `e1` or `e2` are present. |
-| f         | **ST\_ModifierScale** | optional | Scale factor for a constant `f` modifier for the line that the point closes. MUST be a number value between 0 and 1. MUST NOT be given, if `f1` or `f2` are present. |
-| g         | **ST\_ModifierScale** | optional | Scale factor for a constant `g` modifier for the line that the point closes. MUST be a number value between 0 and 1. MUST NOT be given, if `g1` or `g2` are present. |
-| h         | **ST\_ModifierScale** | optional | Scale factor for a constant `h` modifier for the line that the point closes. MUST be a number value between 0 and 1. MUST NOT be given, if `h1` or `h2` are present. |
-| e1, e2         | **ST\_ModifierScale** | optional | First and second scale factors for a linear `e` modifier for the line that the point closes. MUST be a number value between 0 and 1.  MUST NOT be given, if `e` is present. If `e1` is given, `e2` MUST be present, and vice versa. |
-| f1, f2         | **ST\_ModifierScale** | optional | First and second scale factors for a linear `f` modifier for the line that the point closes. MUST be a number value between 0 and 1.  MUST NOT be given, if `f` is present. If `f1` is given, `f2` MUST be present, and vice versa. |
-| g1, g2         | **ST\_ModifierScale** | optional | First and second scale factors for a linear `g` modifier for the line that the point closes. MUST be a number value between 0 and 1.  MUST NOT be given, if `g` is present. If `g1` is given, `g2` MUST be present, and vice versa. |
-| h1, h2         | **ST\_ModifierScale** | optional | First and second scale factors for a linear `h` modifier for the line that the point closes. MUST be a number value between 0 and 1.  MUST NOT be given, if `h` is present. If `h1` is given, `h2` MUST be present, and vice versa. |
+| e1, e2         | **ST\_ModifierScale** | optional | Start (`e1`) and optional end (`e2`) scale factors for the line that the point closes. Each MUST be between 0 and 1 and is independently optional. |
+| f1, f2         | **ST\_ModifierScale** | optional | Start (`f1`) and optional end (`f2`) scale factors for the line that the point closes. Each MUST be between 0 and 1 and is independently optional. |
+| g1, g2         | **ST\_ModifierScale** | optional | Start (`g1`) and optional end (`g2`) scale factors for the line that the point closes. Each MUST be between 0 and 1 and is independently optional. |
+| h1, h2         | **ST\_ModifierScale** | optional | Start (`h1`) and optional end (`h2`) scale factors for the line that the point closes. Each MUST be between 0 and 1 and is independently optional. |
 
 
 ### 1.2.2 Parallel Execution and Laser Synchronization
@@ -924,6 +910,8 @@ A **polyline** is an open chain of connected line segments executed as a single 
 
 Each point other than the first "closes" the line arriving from the preceding point; the modifier factors and `tag` on a point therefore apply to that incoming line. The first point has no incoming line, so any modifier factors or `tag` on it are unused.
 
+For each modifier factor on a polyline, an omitted `*2` value defaults to the resolved `*1` value. When `*1` is omitted, it inherits the effective end value of the preceding line (`*2` when present, otherwise the resolved `*1` value). On the first marked line, where no preceding line value exists, `*1` defaults to `1.0`. These rules preserve factor continuity across connected lines while allowing a producer to emit a new value only where it changes.
+
 **Children**
 
 * Two or more **\<point>** elements (MUST be ≥ 2).
@@ -946,6 +934,8 @@ The `<point>` children of a polyline segment use the same attributes as the plan
 ### 1.3.2 Loop Segment (planar)
 
 A **loop** is a closed polygon executed as a single continuous mark. Closure is **implied by the segment `type`**: the point list gives each vertex exactly once, and a consumer MUST always connect the last **\<point>** back to the first to close the polygon. The first vertex SHOULD NOT be repeated as an explicit final point; if a producer does repeat it, the consumer MUST treat the duplicated final point as redundant (no zero-length closing move is inserted). The modifier factors and `tag` of the first point apply to this implied closing line.
+
+Modifier factors on a loop use the same fallback rules as a polyline: an omitted `*2` defaults to the resolved `*1`, and an omitted `*1` inherits the effective end value at the preceding vertex. For the first point in document order, the preceding vertex is the last point because the loop is closed. If no prior effective value can be resolved, `*1` defaults to `1.0`.
 
 **Children**
 
@@ -972,13 +962,15 @@ A **hatch** segment is a set of independent straight lines. Unlike a polyline or
 
 Each hatch line carries its own modifier factors and `tag`, which apply to that line from its start point to its end point. There is no shared or implied connection between hatches, so no modifier factor or `tag` spans two lines.
 
+Because hatch lines are discontiguous, an omitted `*1` modifier factor defaults to `1.0` independently on each **\<hatch>**. An omitted `*2` defaults to the resolved `*1` value for that hatch.
+
 **Children**
 
 * One or more **\<hatch>** elements (MUST be ≥ 1).
 
 **Child \<hatch> (planar)**
 
-The `<hatch>` children of a hatch segment use the attributes defined for the planar `<hatch>` in [§1.2.1](#121-children-of-segment): the start and end coordinates (`x1`/`y1`, `x2`/`y2`), an optional `tag`, and the constant (`e`/`f`/`g`/`h`) or linear (`e1`/`e2` … `h1`/`h2`) modifier factors that modulate the line from its start to its end point.
+The `<hatch>` children of a hatch segment use the attributes defined for the planar `<hatch>` in [§1.2.1](#121-children-of-segment): the start and end coordinates (`x1`/`y1`, `x2`/`y2`), an optional `tag`, and the start (`e1` … `h1`) and optional end (`e2` … `h2`) modifier factors that modulate the line from its start to its end point.
 
 **Example** — two independent, parallel hatch lines (the move between them is a non-marking jump):
 
@@ -1004,6 +996,8 @@ A **3-axis polyline** is an open chain of connected line segments in 3D space, e
 
 Each point other than the first "closes" the line arriving from the preceding point; the modifier factors and `tag` on a point therefore apply to that incoming line. The first point has no incoming line, so any modifier factors or `tag` on it are unused.
 
+For each modifier factor, an omitted `*2` value defaults to the resolved `*1` value. When `*1` is omitted, it inherits the effective end value of the preceding line (`*2` when present, otherwise the resolved `*1` value). On the first marked line, where no preceding line value exists, `*1` defaults to `1.0`.
+
 This segment type applies only to a toolpath with `toolpathtype="3axis"`.
 
 **Children**
@@ -1012,7 +1006,7 @@ This segment type applies only to a toolpath with `toolpathtype="3axis"`.
 
 **Child \<point3d> (3axis)**
 
-The `<point3d>` children of a 3-axis polyline use the attributes defined for `<point3d>` in [§1.2.1](#121-children-of-segment): the `x`, `y`, `z` coordinates, an optional `tag`, and the constant (`e`/`f`/`g`/`h`) or linear (`e1`/`e2` … `h1`/`h2`) modifier factors that apply to the line ending at that point.
+The `<point3d>` children of a 3-axis polyline use the attributes defined for `<point3d>` in [§1.2.1](#121-children-of-segment): the `x`, `y`, `z` coordinates, an optional `tag`, and the start (`e1` … `h1`) and optional end (`e2` … `h2`) modifier factors that apply to the line ending at that point.
 
 **Example** — an open 3-axis polyline climbing in Z (requires `toolpathtype="3axis"`):
 
@@ -1029,6 +1023,8 @@ The `<point3d>` children of a 3-axis polyline use the attributes defined for `<p
 A **6-axis polyline** is an open chain of connected line segments in 3D space in which each point additionally carries an orientation, executed as a single continuous mark. The **\<point6d>** children are visited in document order; a consumer marks a straight line from each point to the next through their explicit `x`, `y`, `z` coordinates while carrying the reference-frame orientation given by the quaternion values (`i`, `j`, `k`, `w`) at each point. Like a planar polyline, it is **open**: no line is implied from the last point back to the first, and the first vertex is never repeated at the end.
 
 Each point other than the first "closes" the line arriving from the preceding point; the modifier factors and `tag` on a point therefore apply to that incoming line. The first point has no incoming line, so any modifier factors or `tag` on it are unused.
+
+For each modifier factor, an omitted `*2` value defaults to the resolved `*1` value. When `*1` is omitted, it inherits the effective end value of the preceding line (`*2` when present, otherwise the resolved `*1` value). On the first marked line, where no preceding line value exists, `*1` defaults to `1.0`.
 
 ![Interpolated Quaternion reference frame](images/quaternionreferenceframe.png)
 
@@ -1097,7 +1093,7 @@ This segment type applies only to a toolpath with `toolpathtype="6axis"`.
 
 **Child \<point6d> (6axis)**
 
-The `<point6d>` children of a 6-axis polyline use the attributes defined for `<point6d>` in [§1.2.1](#121-children-of-segment): the `x`, `y`, `z` coordinates, the quaternion orientation (`i`, `j`, `k`, `w`), an optional `tag`, and the constant (`e`/`f`/`g`/`h`) or linear (`e1`/`e2` … `h1`/`h2`) modifier factors that apply to the line ending at that point.
+The `<point6d>` children of a 6-axis polyline use the attributes defined for `<point6d>` in [§1.2.1](#121-children-of-segment): the `x`, `y`, `z` coordinates, the quaternion orientation (`i`, `j`, `k`, `w`), an optional `tag`, and the start (`e1` … `h1`) and optional end (`e2` … `h2`) modifier factors that apply to the line ending at that point.
 
 **Example** — an open 6-axis polyline; each point carries an orientation quaternion (here the identity orientation `w=1`), requires `toolpathtype="6axis"`:
 
@@ -1361,14 +1357,10 @@ targetNamespace="http://schemas.3mf.io/3dmanufacturing/toolpath/2026/03" element
 	</xs:simpleType>
 
 	<!-- ===================== Attribute Groups ===================== -->
-	<!-- Per-point/per-hatch scale factors. The unindexed factors (e,f,g,h) apply
-	     to "constant" modifiers; the indexed pairs (x1/x2) apply to "linear"
-	     modifiers, giving the value at the start and end of the line. -->
+	<!-- Per-point/per-hatch scale factors. The x1 attributes give the value at
+	     the start of the line; the optional x2 attributes give the value at the
+	     end. When x2 is omitted, its value defaults to x1. -->
 	<xs:attributeGroup name="AG_ModifierFactors">
-		<xs:attribute name="e" type="ST_ModifierScale" use="optional"/>
-		<xs:attribute name="f" type="ST_ModifierScale" use="optional"/>
-		<xs:attribute name="g" type="ST_ModifierScale" use="optional"/>
-		<xs:attribute name="h" type="ST_ModifierScale" use="optional"/>
 		<xs:attribute name="e1" type="ST_ModifierScale" use="optional"/>
 		<xs:attribute name="e2" type="ST_ModifierScale" use="optional"/>
 		<xs:attribute name="f1" type="ST_ModifierScale" use="optional"/>
