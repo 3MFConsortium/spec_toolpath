@@ -42,6 +42,11 @@ targetNamespace="http://schemas.3mf.io/3dmanufacturing/toolpath/2026/03" element
 			<xs:pattern value="[-+]?((([0-9]+(\.[0-9]*)?)|(\.[0-9]+))([eE][-+]?[0-9]+)?)"/>
 		</xs:restriction>
 	</xs:simpleType>
+	<xs:simpleType name="ST_NonNegativeNumber">
+		<xs:restriction base="ST_Number">
+			<xs:minInclusive value="0.0"/>
+		</xs:restriction>
+	</xs:simpleType>
 	<xs:simpleType name="ST_Integer">
 		<xs:restriction base="xs:int"/>
 	</xs:simpleType>
@@ -226,6 +231,7 @@ targetNamespace="http://schemas.3mf.io/3dmanufacturing/toolpath/2026/03" element
 		<xs:attribute name="j" type="ST_Number" use="required"/>
 		<xs:attribute name="k" type="ST_Number" use="required"/>
 		<xs:attribute name="w" type="ST_Number" use="required"/>
+		<xs:attribute name="angletolerance" type="ST_NonNegativeNumber" use="optional" default="0.0"/>
 		<xs:attribute name="tag" type="ST_NonNegativeInteger" use="optional"/>
 		<xs:attributeGroup ref="AG_ModifierFactors"/>
 		<xs:anyAttribute namespace="##other" processContents="lax"/>
