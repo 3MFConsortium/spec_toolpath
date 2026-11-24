@@ -126,14 +126,10 @@ targetNamespace="http://schemas.3mf.io/3dmanufacturing/toolpath/2026/03" element
 	</xs:simpleType>
 
 	<!-- ===================== Attribute Groups ===================== -->
-	<!-- Per-point/per-hatch scale factors. The unindexed factors (e,f,g,h) apply
-	     to "constant" modifiers; the indexed pairs (x1/x2) apply to "linear"
-	     modifiers, giving the value at the start and end of the line. -->
+	<!-- Per-point/per-hatch scale factors. The x1 attributes give the value at
+	     the start of the line; the optional x2 attributes give the value at the
+	     end. When x2 is omitted, its value defaults to x1. -->
 	<xs:attributeGroup name="AG_ModifierFactors">
-		<xs:attribute name="e" type="ST_ModifierScale" use="optional"/>
-		<xs:attribute name="f" type="ST_ModifierScale" use="optional"/>
-		<xs:attribute name="g" type="ST_ModifierScale" use="optional"/>
-		<xs:attribute name="h" type="ST_ModifierScale" use="optional"/>
 		<xs:attribute name="e1" type="ST_ModifierScale" use="optional"/>
 		<xs:attribute name="e2" type="ST_ModifierScale" use="optional"/>
 		<xs:attribute name="f1" type="ST_ModifierScale" use="optional"/>
