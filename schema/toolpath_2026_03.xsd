@@ -112,8 +112,7 @@ targetNamespace="http://schemas.3mf.io/3dmanufacturing/toolpath/2026/03" element
 	</xs:simpleType>
 	<xs:simpleType name="ST_SegmentType">
 		<xs:restriction base="xs:string">
-			<xs:enumeration value="loop"/>
-			<xs:enumeration value="polyline"/>
+			<xs:enumeration value="polyline2d"/>
 			<xs:enumeration value="hatch"/>
 			<xs:enumeration value="polyline3d"/>
 			<xs:enumeration value="polyline6d"/>
@@ -320,17 +319,18 @@ targetNamespace="http://schemas.3mf.io/3dmanufacturing/toolpath/2026/03" element
 	<xs:element name="segment" type="CT_Segment"/>
 	<xs:complexType name="CT_Segment">
 		<!-- A segment carries the geometry appropriate to the toolpathtype:
-		     <point> for planar, <point3d>/<point6d> for 3axis/6axis polylines and
-		     loops, and <hatch> for hatch segments. A Binary Encoding extension MAY
+		     <point2d>/<point3d>/<point6d> for polylines and <hatch> for hatch
+		     segments. A Binary Encoding extension MAY
 		     supply the geometry through foreign-namespaced elements instead. -->
 		<xs:choice minOccurs="0" maxOccurs="2147483647">
-			<xs:element ref="point"/>
+			<xs:element ref="point2d"/>
 			<xs:element ref="point3d"/>
 			<xs:element ref="point6d"/>
 			<xs:element ref="hatch"/>
 			<xs:any namespace="##other" processContents="lax"/>
 		</xs:choice>
 		<xs:attribute name="type" type="ST_SegmentType" use="required"/>
+		<xs:attribute name="closed" type="xs:boolean" use="optional" default="false"/>
 		<xs:attribute name="profileid" type="ST_PositiveInteger" use="required"/>
 		<xs:attribute name="partid" type="ST_PositiveInteger" use="required"/>
 		<xs:attribute name="laserindex" type="ST_NonNegativeInteger" use="optional"/>
@@ -352,8 +352,8 @@ targetNamespace="http://schemas.3mf.io/3dmanufacturing/toolpath/2026/03" element
 		<xs:anyAttribute namespace="##other" processContents="lax"/>
 	</xs:complexType>
 
-	<xs:element name="point" type="CT_Point"/>
-	<xs:complexType name="CT_Point">
+	<xs:element name="point2d" type="CT_Point2D"/>
+	<xs:complexType name="CT_Point2D">
 		<xs:sequence>
 			<xs:element ref="sub" minOccurs="0" maxOccurs="2147483647"/>
 		</xs:sequence>

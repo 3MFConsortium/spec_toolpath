@@ -61,8 +61,7 @@
     - [1.2.2 Parallel Execution and Laser Synchronization](#122-parallel-execution-and-laser-synchronization)
   - [1.3. Planar Segment Data](#13-planar-segment-data)
     - [1.3.1 Polyline Segment (planar)](#131-polyline-segment-planar)
-    - [1.3.2 Loop Segment (planar)](#132-loop-segment-planar)
-    - [1.3.3 Hatch Segment (planar)](#133-hatch-segment-planar)
+    - [1.3.2 Hatch Segment (planar)](#132-hatch-segment-planar)
   - [1.4. Non-Planar Segment Data](#14-non-planar-segment-data)
     - [1.4.1 Polyline Segment (3 axis)](#141-polyline-segment-3-axis)
     - [1.4.2 Polyline Segment (6 axis)](#142-polyline-segment-6-axis)
@@ -202,7 +201,7 @@ Planar toolpaths describe geometry and process instructions that are confined to
 - Fused Filament Fabrication (FFF)
 
 
-Each layer consists of one or more 2D geometric primitives such as loops, polylines, and hatches. These are defined in the XY-plane and associated with a Z-height. This representation provides high resolution in XY and discrete control in Z, aligning closely with the native processing model of many industrial AM systems.
+Each layer consists of one or more 2D geometric primitives such as open or closed polylines and hatches. These are defined in the XY-plane and associated with a Z-height. This representation provides high resolution in XY and discrete control in Z, aligning closely with the native processing model of many industrial AM systems.
 
 Planar toolpaths are especially well suited for:
 
@@ -294,7 +293,7 @@ The layer files are typically named and located under a defined folder structure
     ...
 
 >**Note:**
-Each layer file contains geometry segments (e.g., loops, polylines, hatches) as well as metadata, references to toolpath profiles and build items. See [Part II](#part-ii-layer-data) for the exact definitions.
+Each layer file contains geometry segments (e.g., open or closed polylines and hatches) as well as metadata, references to toolpath profiles and build items. See [Part II](#part-ii-layer-data) for the exact definitions.
 
 
 ## 3.2 Relationships and Binding
@@ -477,7 +476,7 @@ A producer MUST obey the following rules:
 
 ### Nonlinear Override Support Points
 
-For modifiers with `type="nonlinear"`, geometry elements (`<hatch>`, `<point>`, `<point3d>`, or `<point6d>`) MAY contain one or more **\<sub>** child elements. Each **\<sub>** element defines a support point on a piecewise-linear interpolation curve along the geometry element.
+For modifiers with `type="nonlinear"`, geometry elements (`<hatch>`, `<point2d>`, `<point3d>`, or `<point6d>`) MAY contain one or more **\<sub>** child elements. Each **\<sub>** element defines a support point on a piecewise-linear interpolation curve along the geometry element.
 
 **Element \<sub>**
 
@@ -784,7 +783,7 @@ When present, **\<data>** appears after **\<profiles>** and before **\<segments>
 
 Contains one or more **\<segment>** elements.
 
-A **segment** is the generic container node for a single unit of toolpath content. Every **\<segment>** carries the common attributes below (geometry `type`, profile and part references, laser assignment, and timing hints) and derives into exactly one specialized geometry form that supplies the concrete point or line data — currently a `loop`, `polyline`, or `hatch` (planar), or a `polyline3d` / `polyline6d` (non-planar). Segments are the atomic building blocks of a layer: a layer's marking instructions are expressed entirely as an ordered list of segments.
+A **segment** is the generic container node for a single unit of toolpath content. Every **\<segment>** carries the common attributes below (geometry `type`, profile and part references, laser assignment, and timing hints) and derives into exactly one specialized geometry form that supplies the concrete point or line data — currently a `polyline2d` or `hatch` (planar), or a `polyline3d` / `polyline6d` (non-planar). Segments are the atomic building blocks of a layer: a layer's marking instructions are expressed entirely as an ordered list of segments.
 
 > **Note:** Additional geometry types (for example, arcs and Bézier curves) are anticipated in future revisions of this extension. They were intentionally deferred beyond the first release to keep the initial geometry set small and broadly implementable. A consumer MUST reject a layer that contains a segment `type` it does not recognize.
 
@@ -796,7 +795,8 @@ All segments are listed in document order within **\<segments>**. Segments that 
 
 | Name      | Type                       | Use      | Default | Annotation                                                            |
 | --------- | -------------------------- | -------- | ------- | --------------------------------------------------------------------- |
-| type      | **ST\_SegmentType**        | required |         | One of `loop`, `polyline`, `hatch` (planar), or `polyline3d`, `polyline6d` (non-planar). |
+| type      | **ST\_SegmentType**        | required |         | One of `polyline2d`, `hatch` (planar), or `polyline3d`, `polyline6d` (non-planar). |
+| closed    | **xs:boolean**             | optional | false   | For a polyline segment, whether the final point is connected back to the first point. MUST NOT be specified on a `hatch` segment. |
 | profileid | **ST\_PositiveInteger**    | required |         | Resolves via **\<profiles>** ([§1.1.2](#112-profiles)).              |
 | partid    | **ST\_PositiveInteger**    | required |         | Resolves via **\<parts>** ([§1.1.1](#111-parts)).                    |
 | laserindex | **ST\_NonNegativeInteger** | optional |         | Laser processes: overrides the `laserindex` of the referenced profile for this segment. If present, a consumer MUST use this value instead of the profile's `laserindex` to select the laser unit. If absent, the profile's `laserindex` applies; if that is also absent, the **\<tp\:lasersources>** `default` applies (see [§4.5 Laser Sources](#45-laser-sources)). The resolved index MUST reference a declared **\<tp\:lasersource>** when **\<tp\:lasersources>** is present. |
@@ -811,11 +811,11 @@ A segment node MAY include arbitrary attributes, if they are properly namespaced
 
 The _type_ attribute of a segment determines its acceptable XML child nodes. 
 
-**Child \<point> (planar)**
+**Child \<point2d> (planar)**
 
 ![Layer Point XML Structure](images/layerpoint.png)
 
-For type `loop` and `polyline`, the segment MUST contain a non-empty list of planar points.
+For type `polyline2d`, the segment MUST contain a non-empty list of planar points.
 
 | Name      | Type            | Use      | Annotation                                                                                 |
 | --------- | --------------- | -------- | ------------------------------------------------------------------------------------------ |
@@ -920,55 +920,44 @@ Planar segment elements MUST NOT be used, if the **\<tp\:toolpathresource>**'s `
 
 ### 1.3.1 Polyline Segment (planar)
 
-A **polyline** is an open chain of connected line segments executed as a single continuous mark. The **\<point>** children are visited in document order, and a consumer marks a straight line from each point to the next. Unlike a loop, a polyline is **open**: no line is implied from the last point back to the first, and the first vertex is never repeated at the end.
+A **2D polyline** is a chain of connected line segments executed as a single continuous mark. The **\<point2d>** children are visited in document order, and a consumer marks a straight line from each point to the next.
 
-Each point other than the first "closes" the line arriving from the preceding point; the modifier factors and `tag` on a point therefore apply to that incoming line. The first point has no incoming line, so any modifier factors or `tag` on it are unused.
+When `closed` is omitted or `false`, the polyline is open: no line is implied from the last point back to the first. When `closed="true"`, the consumer MUST connect the last point back to the first. A closed polyline's point list is intended to give each vertex exactly once. The first vertex SHOULD NOT be repeated as an explicit final point; if a producer does repeat it, the consumer MUST treat the duplicated final point as redundant and MUST NOT insert a zero-length closing move.
+
+Each point other than the first "closes" the line arriving from the preceding point; the modifier factors and `tag` on a point therefore apply to that incoming line. For an open polyline, the first point has no incoming line, so any modifier factors or `tag` on it are unused. For a closed polyline, the modifier factors and `tag` of the first point apply to the implied closing line from the last point back to the first.
 
 **Children**
 
 * Two or more **\<point>** elements (MUST be ≥ 2).
 
-**Child \<point> (planar)**
+**Child \<point2d> (planar)**
 
-The `<point>` children of a polyline segment use the same attributes as the planar `<point>` defined in [§1.2.1](#121-children-of-segment). For a polyline, the "line that the point closes" is the line ending at that point.
+The `<point2d>` children of a polyline segment use the same attributes as the planar `<point2d>` defined in [§1.2.1](#121-children-of-segment). The "line that the point closes" is the line ending at that point, except that the first point of a closed polyline governs the implied closing line.
 
 **Example** — an open polyline of three points (two connected line segments):
 
 ```xml
-<segment type="polyline" profileid="1" partid="1">
-  <point x="0" y="0"/>
-  <point x="10000" y="0"/>
-  <point x="10000" y="5000"/>
+<segment type="polyline2d" profileid="1" partid="1">
+  <point2d x="0" y="0"/>
+  <point2d x="10000" y="0"/>
+  <point2d x="10000" y="5000"/>
 </segment>
 ```
 
-
-### 1.3.2 Loop Segment (planar)
-
-A **loop** is a closed polygon executed as a single continuous mark. Closure is **implied by the segment `type`**: the point list gives each vertex exactly once, and a consumer MUST always connect the last **\<point>** back to the first to close the polygon. The first vertex SHOULD NOT be repeated as an explicit final point; if a producer does repeat it, the consumer MUST treat the duplicated final point as redundant (no zero-length closing move is inserted). The modifier factors and `tag` of the first point apply to this implied closing line.
-
-**Children**
-
-* Three or more **\<point>** elements (MUST be ≥ 3).
-
-**Child \<point> (planar)**
-
-The `<point>` children of a loop segment use the same attributes as the planar `<point>` defined in [§1.2.1](#121-children-of-segment). For a loop, the "line that the point closes" is the line ending at that point, and the closing line from the last point back to the first inherits the modifier factors and `tag` of the first point.
-
-**Example** — a triangular loop; the first vertex is not repeated, the closing edge from the last point back to the first is implied:
+**Example** — a closed triangular polyline; the first vertex is not repeated, and the closing edge from the last point back to the first is implied:
 
 ```xml
-<segment type="loop" profileid="1" partid="1">
-  <point x="0" y="0"/>
-  <point x="10000" y="0"/>
-  <point x="5000" y="8000"/>
+<segment type="polyline2d" closed="true" profileid="1" partid="1">
+  <point2d x="0" y="0"/>
+  <point2d x="10000" y="0"/>
+  <point2d x="5000" y="8000"/>
 </segment>
 ```
 
 
-### 1.3.3 Hatch Segment (planar)
+### 1.3.2 Hatch Segment (planar)
 
-A **hatch** segment is a set of independent straight lines. Unlike a polyline or loop, the lines are **not** connected: each **\<hatch>** child defines its own start point (`x1`, `y1`) and end point (`x2`, `y2`) and is exposed on its own. The travel from the end of one hatch to the start of the next is a non-marking **jump**. Hatches are exposed in the document order of the **\<hatch>** children.
+A **hatch** segment is a set of independent straight lines. Unlike a polyline, the lines are **not** connected: each **\<hatch>** child defines its own start point (`x1`, `y1`) and end point (`x2`, `y2`) and is exposed on its own. The travel from the end of one hatch to the start of the next is a non-marking **jump**. Hatches are exposed in the document order of the **\<hatch>** children.
 
 Each hatch line carries its own modifier factors and `tag`, which apply to that line from its start point to its end point. There is no shared or implied connection between hatches, so no modifier factor or `tag` spans two lines.
 
@@ -1000,15 +989,16 @@ Because these segments carry an explicit `z` coordinate (and, for 6-axis, an ori
 
 ### 1.4.1 Polyline Segment (3 axis)
 
-A **3-axis polyline** is an open chain of connected line segments in 3D space, executed as a single continuous mark. The **\<point3d>** children are visited in document order, and a consumer marks a straight line from each point to the next through their explicit `x`, `y`, `z` coordinates. Like a planar polyline, it is **open**: no line is implied from the last point back to the first, and the first vertex is never repeated at the end.
+A **3-axis polyline** is a chain of connected line segments in 3D space, executed as a single continuous mark. The **\<point3d>** children are visited in document order, and a consumer marks a straight line from each point to the next through their explicit `x`, `y`, `z` coordinates. When `closed` is omitted or `false`, no line is implied from the last point back to the first. When `closed="true"`, the consumer MUST connect the last point back to the first.
 
-Each point other than the first "closes" the line arriving from the preceding point; the modifier factors and `tag` on a point therefore apply to that incoming line. The first point has no incoming line, so any modifier factors or `tag` on it are unused.
+Each point other than the first "closes" the line arriving from the preceding point; the modifier factors and `tag` on a point therefore apply to that incoming line. For an open polyline, the first point has no incoming line, so any modifier factors or `tag` on it are unused. For a closed polyline, the modifier factors and `tag` of the first point apply to the implied closing line. A closed polyline SHOULD list each vertex exactly once and MUST contain at least three points; the repeated-final-point handling defined in [§1.3.1](#131-polyline-segment-planar) also applies.
 
 This segment type applies only to a toolpath with `toolpathtype="3axis"`.
 
 **Children**
 
-* Two or more **\<point3d>** elements (MUST be ≥ 2).
+* An open polyline MUST contain two or more **\<point3d>** elements.
+* A closed polyline MUST contain three or more **\<point3d>** elements.
 
 **Child \<point3d> (3axis)**
 
@@ -1026,9 +1016,9 @@ The `<point3d>` children of a 3-axis polyline use the attributes defined for `<p
 
 ### 1.4.2 Polyline Segment (6 axis)
 
-A **6-axis polyline** is an open chain of connected line segments in 3D space in which each point additionally carries an orientation, executed as a single continuous mark. The **\<point6d>** children are visited in document order; a consumer marks a straight line from each point to the next through their explicit `x`, `y`, `z` coordinates while carrying the reference-frame orientation given by the quaternion values (`i`, `j`, `k`, `w`) at each point. Like a planar polyline, it is **open**: no line is implied from the last point back to the first, and the first vertex is never repeated at the end.
+A **6-axis polyline** is a chain of connected line segments in 3D space in which each point additionally carries an orientation, executed as a single continuous mark. The **\<point6d>** children are visited in document order; a consumer marks a straight line from each point to the next through their explicit `x`, `y`, `z` coordinates while carrying the reference-frame orientation given by the quaternion values (`i`, `j`, `k`, `w`) at each point. When `closed` is omitted or `false`, no line is implied from the last point back to the first. When `closed="true"`, the consumer MUST connect the last point back to the first and interpolate position and orientation along that closing line using the same rules as any other line.
 
-Each point other than the first "closes" the line arriving from the preceding point; the modifier factors and `tag` on a point therefore apply to that incoming line. The first point has no incoming line, so any modifier factors or `tag` on it are unused.
+Each point other than the first "closes" the line arriving from the preceding point; the modifier factors and `tag` on a point therefore apply to that incoming line. For an open polyline, the first point has no incoming line, so any modifier factors or `tag` on it are unused. For a closed polyline, the modifier factors and `tag` of the first point apply to the implied closing line. A closed polyline SHOULD list each vertex exactly once and MUST contain at least three points; the repeated-final-point handling defined in [§1.3.1](#131-polyline-segment-planar) also applies.
 
 ![Interpolated Quaternion reference frame](images/quaternionreferenceframe.png)
 
@@ -1093,7 +1083,8 @@ This segment type applies only to a toolpath with `toolpathtype="6axis"`.
 
 **Children**
 
-* Two or more **\<point6d>** elements (MUST be ≥ 2).
+* An open polyline MUST contain two or more **\<point6d>** elements.
+* A closed polyline MUST contain three or more **\<point6d>** elements.
 
 **Child \<point6d> (6axis)**
 
@@ -1151,11 +1142,9 @@ The `<point6d>` children of a 6-axis polyline use the attributes defined for `<p
 
 **Layer part.** The OPC XML part (e.g. `/Toolpath/Layers/layer00001.xml`) whose root element is **\<layer>**.
 
-**Segment.** A **\<segment>** element: the generic container for one unit of toolpath content, carrying common attributes (`type`, `profileid`, `partid`, …) and exactly one geometry form (`loop`, `polyline`, `hatch`, `polyline3d`, or `polyline6d`).
+**Segment.** A **\<segment>** element: the generic container for one unit of toolpath content, carrying common attributes (`type`, `profileid`, `partid`, …) and exactly one geometry form (`polyline2d`, `hatch`, `polyline3d`, or `polyline6d`).
 
-**Loop.** A closed polygon segment; closure from the last point back to the first is implied by the segment `type`.
-
-**Polyline.** An open chain of connected line segments executed as a single continuous mark.
+**Polyline.** A chain of connected line segments executed as a single continuous mark. Its `closed` attribute determines whether the final point connects back to the first.
 
 **Hatch.** A segment consisting of independent, unconnected lines; travel between consecutive hatches is a non-marking jump.
 
@@ -1347,8 +1336,7 @@ targetNamespace="http://schemas.3mf.io/3dmanufacturing/toolpath/2026/03" element
 	</xs:simpleType>
 	<xs:simpleType name="ST_SegmentType">
 		<xs:restriction base="xs:string">
-			<xs:enumeration value="loop"/>
-			<xs:enumeration value="polyline"/>
+			<xs:enumeration value="polyline2d"/>
 			<xs:enumeration value="hatch"/>
 			<xs:enumeration value="polyline3d"/>
 			<xs:enumeration value="polyline6d"/>
@@ -1555,17 +1543,18 @@ targetNamespace="http://schemas.3mf.io/3dmanufacturing/toolpath/2026/03" element
 	<xs:element name="segment" type="CT_Segment"/>
 	<xs:complexType name="CT_Segment">
 		<!-- A segment carries the geometry appropriate to the toolpathtype:
-		     <point> for planar, <point3d>/<point6d> for 3axis/6axis polylines and
-		     loops, and <hatch> for hatch segments. A Binary Encoding extension MAY
+		     <point2d>/<point3d>/<point6d> for polylines and <hatch> for hatch
+		     segments. A Binary Encoding extension MAY
 		     supply the geometry through foreign-namespaced elements instead. -->
 		<xs:choice minOccurs="0" maxOccurs="2147483647">
-			<xs:element ref="point"/>
+			<xs:element ref="point2d"/>
 			<xs:element ref="point3d"/>
 			<xs:element ref="point6d"/>
 			<xs:element ref="hatch"/>
 			<xs:any namespace="##other" processContents="lax"/>
 		</xs:choice>
 		<xs:attribute name="type" type="ST_SegmentType" use="required"/>
+		<xs:attribute name="closed" type="xs:boolean" use="optional" default="false"/>
 		<xs:attribute name="profileid" type="ST_PositiveInteger" use="required"/>
 		<xs:attribute name="partid" type="ST_PositiveInteger" use="required"/>
 		<xs:attribute name="laserindex" type="ST_NonNegativeInteger" use="optional"/>
@@ -1587,8 +1576,8 @@ targetNamespace="http://schemas.3mf.io/3dmanufacturing/toolpath/2026/03" element
 		<xs:anyAttribute namespace="##other" processContents="lax"/>
 	</xs:complexType>
 
-	<xs:element name="point" type="CT_Point"/>
-	<xs:complexType name="CT_Point">
+	<xs:element name="point2d" type="CT_Point2D"/>
+	<xs:complexType name="CT_Point2D">
 		<xs:sequence>
 			<xs:element ref="sub" minOccurs="0" maxOccurs="2147483647"/>
 		</xs:sequence>
