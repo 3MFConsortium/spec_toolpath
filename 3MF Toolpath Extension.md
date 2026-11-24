@@ -892,6 +892,7 @@ For type `polyline6d`, the segment MUST contain a non-empty list of 6axis points
 | j         | **ST\_Number** | required | Quaternion `j` value of a reference frame at the point.                                                               |
 | k         | **ST\_Number** | required | Quaternion `k` value of a reference frame at the point.                                                               |
 | w         | **ST\_Number** | required | Quaternion `w` value of a reference frame at the point.                                                               |
+| angletolerance | **ST\_NonNegativeNumber** | optional | Maximum allowable angular deviation, in degrees, of the realized tool axis from the nominal tool axis specified by the quaternion. Defaults to `0.0`. |
 | tag       | **ST\_NonNegativeInteger** | optional | Producer-defined marker for the line that the point closes. Tags have no direct meaning, but MAY be referenced from Metadata. |
 | e         | **ST\_ModifierScale** | optional | Scale factor for a constant `e` modifier for the line that the point closes. MUST be a number value between 0 and 1. MUST NOT be given, if `e1` or `e2` are present. |
 | f         | **ST\_ModifierScale** | optional | Scale factor for a constant `f` modifier for the line that the point closes. MUST be a number value between 0 and 1. MUST NOT be given, if `f1` or `f2` are present. |
@@ -1034,6 +1035,10 @@ Each point other than the first "closes" the line arriving from the preceding po
 
 **Orientation as a reference frame.** The quaternion (`i`, `j`, `k`, `w`) carried by a **\<point6d>** is a unit quaternion that encodes a rotation of the machine (world) coordinate system. Applied to the machine axes, that rotation defines a canonical, right-handed orthonormal **reference frame** — a local coordinate system — anchored at the point: it maps the global X, Y, and Z axes onto three mutually perpendicular unit vectors that fix the tool (or deposition-head) orientation there. Each **\<point6d>** therefore specifies a complete pose — a position *and* an orientation — so that the six degrees of freedom (three translational from `x`, `y`, `z`; three rotational from the quaternion) are captured together, with no separate angle convention or axis ordering to agree upon. Producers SHOULD emit unit quaternions (`i² + j² + k² + w² = 1`); a consumer SHOULD normalize on read to absorb rounding, and MUST reject a point whose quaternion is not normalizable (e.g. all-zero).
 
+**Orientation tolerance.** The optional `angletolerance` attribute specifies, in degrees, the maximum allowable angular deviation between the target tool axis and the realized tool axis at that point. The target tool axis is the local positive Z axis (`z′`) of the reference frame specified by (`i`, `j`, `k`, `w`). Thus, for unit vectors **n**<sub>target</sub> and **n**<sub>realized</sub>, a realized axis is within a tolerance θ when **n**<sub>target</sub> · **n**<sub>realized</sub> ≥ cos(θ). The attribute is non-negative and applies only to the waypoint on which it appears; it does not change the nominal quaternion or relax rotation about the tool axis.
+
+When `angletolerance` is omitted, its value is `0.0`. A value of `0.0` requires exact tracking of the nominal orientation. A consumer that does not support orientation relaxation MAY safely ignore a nonzero `angletolerance` and track the nominal orientation exactly.
+
 **Interpolation along the toolpath.** Because orientation is stored as a quaternion rather than as raw angles, it interpolates naturally along each line, in step with the straight-line interpolation of `x`, `y`, `z`. Between two consecutive points a consumer MAY linearly interpolate the four quaternion components and renormalize the result to unit length at each sample (normalized linear interpolation, "nlerp"); this is inexpensive and yields a smooth, singularity-free sweep of the reference frame from the start orientation to the end orientation, avoiding the gimbal-lock and wrap-around problems of interpolating Euler angles. Since a quaternion and its negation (`q` and `−q`) denote the same orientation, a consumer MUST interpolate along the shorter arc by negating one endpoint when the dot product of the two endpoint quaternions is negative.
 
 #### Computing with the quaternion (informative)
@@ -1097,7 +1102,7 @@ This segment type applies only to a toolpath with `toolpathtype="6axis"`.
 
 **Child \<point6d> (6axis)**
 
-The `<point6d>` children of a 6-axis polyline use the attributes defined for `<point6d>` in [§1.2.1](#121-children-of-segment): the `x`, `y`, `z` coordinates, the quaternion orientation (`i`, `j`, `k`, `w`), an optional `tag`, and the constant (`e`/`f`/`g`/`h`) or linear (`e1`/`e2` … `h1`/`h2`) modifier factors that apply to the line ending at that point.
+The `<point6d>` children of a 6-axis polyline use the attributes defined for `<point6d>` in [§1.2.1](#121-children-of-segment): the `x`, `y`, `z` coordinates, the quaternion orientation (`i`, `j`, `k`, `w`), the optional `angletolerance`, an optional `tag`, and the constant (`e`/`f`/`g`/`h`) or linear (`e1`/`e2` … `h1`/`h2`) modifier factors that apply to the line ending at that point.
 
 **Example** — an open 6-axis polyline; each point carries an orientation quaternion (here the identity orientation `w=1`), requires `toolpathtype="6axis"`:
 
@@ -1624,6 +1629,7 @@ targetNamespace="http://schemas.3mf.io/3dmanufacturing/toolpath/2026/03" element
 		<xs:attribute name="j" type="ST_Number" use="required"/>
 		<xs:attribute name="k" type="ST_Number" use="required"/>
 		<xs:attribute name="w" type="ST_Number" use="required"/>
+		<xs:attribute name="angletolerance" type="ST_NonNegativeNumber" use="optional" default="0.0"/>
 		<xs:attribute name="tag" type="ST_NonNegativeInteger" use="optional"/>
 		<xs:attributeGroup ref="AG_ModifierFactors"/>
 		<xs:anyAttribute namespace="##other" processContents="lax"/>
